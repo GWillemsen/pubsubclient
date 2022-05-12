@@ -8,6 +8,7 @@
 byte server[] = { 172, 16, 0, 2 };
 
 bool callback_called = false;
+bool callback_wasExtended = false;
 char lastTopic[1024];
 char lastPayload[1024];
 unsigned int lastLength;
@@ -17,14 +18,25 @@ void reset_callback() {
     lastTopic[0] = '\0';
     lastPayload[0] = '\0';
     lastLength = 0;
+    callback_wasExtended = false;
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-    TRACE("Callback received topic=[" << topic << "] length=" << length << "\n")
+    TRACE("Simple callback received topic=[" << topic << "] length=" << length << "\n")
     callback_called = true;
     strcpy(lastTopic,topic);
     memcpy(lastPayload,payload,length);
     lastLength = length;
+    callback_wasExtended = false;
+}
+
+void callback_extended(char* topic, byte* payload, unsigned int length, void *userdata) {
+    TRACE("Extended callback received topic=[" << topic << "] length=" << length << "\n")
+    callback_called = true;
+    strcpy(lastTopic,topic);
+    memcpy(lastPayload,payload,length);
+    lastLength = length;
+    callback_wasExtended = true;
 }
 
 int test_receive_callback() {
@@ -52,6 +64,74 @@ int test_receive_callback() {
     IS_TRUE(strcmp(lastTopic,"topic")==0);
     IS_TRUE(memcmp(lastPayload,"payload",7)==0);
     IS_TRUE(lastLength == 7);
+    IS_FALSE(callback_wasExtended);
+
+    IS_FALSE(shimClient.error());
+
+    END_IT
+}
+
+
+int test_receive_callback_set_method() {
+    IT("receives a callback message when simple callback set with method");
+    reset_callback();
+
+    ShimClient shimClient;
+    shimClient.setAllowConnect(true);
+
+    byte connack[] = { 0x20, 0x02, 0x00, 0x00 };
+    shimClient.respond(connack,4);
+
+    PubSubClient client(server, 1883, shimClient);
+    client.setCallback(callback);
+    int rc = client.connect((char*)"client_test1");
+    IS_TRUE(rc);
+
+    byte publish[] = {0x30,0xe,0x0,0x5,0x74,0x6f,0x70,0x69,0x63,0x70,0x61,0x79,0x6c,0x6f,0x61,0x64};
+    shimClient.respond(publish,16);
+
+    rc = client.loop();
+
+    IS_TRUE(rc);
+
+    IS_TRUE(callback_called);
+    IS_TRUE(strcmp(lastTopic,"topic")==0);
+    IS_TRUE(memcmp(lastPayload,"payload",7)==0);
+    IS_TRUE(lastLength == 7);
+    IS_FALSE(callback_wasExtended);
+
+    IS_FALSE(shimClient.error());
+
+    END_IT
+}
+
+int test_receive_extended_callback_set_method() {
+    IT("receives a callback message when extended callback set with method");
+    reset_callback();
+
+    ShimClient shimClient;
+    shimClient.setAllowConnect(true);
+
+    byte connack[] = { 0x20, 0x02, 0x00, 0x00 };
+    shimClient.respond(connack,4);
+
+    PubSubClient client(server, 1883, shimClient);
+    client.setCallback(callback_extended, nullptr);
+    int rc = client.connect((char*)"client_test1");
+    IS_TRUE(rc);
+
+    byte publish[] = {0x30,0xe,0x0,0x5,0x74,0x6f,0x70,0x69,0x63,0x70,0x61,0x79,0x6c,0x6f,0x61,0x64};
+    shimClient.respond(publish,16);
+
+    rc = client.loop();
+
+    IS_TRUE(rc);
+
+    IS_TRUE(callback_called);
+    IS_TRUE(strcmp(lastTopic,"topic")==0);
+    IS_TRUE(memcmp(lastPayload,"payload",7)==0);
+    IS_TRUE(lastLength == 7);
+    IS_TRUE(callback_wasExtended);
 
     IS_FALSE(shimClient.error());
 
@@ -328,6 +408,8 @@ int main()
 {
     SUITE("Receive");
     test_receive_callback();
+    test_receive_callback_set_method();
+    test_receive_extended_callback_set_method();
     test_receive_stream();
     test_receive_max_sized_message();
     test_drop_invalid_remaining_length_message();
