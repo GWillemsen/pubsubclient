@@ -76,19 +76,11 @@
 // Maximum size of fixed header and variable length size header
 #define MQTT_MAX_HEADER_SIZE 5
 
-#if defined(ESP8266) || defined(ESP32)
-#include <functional>
-#define MQTT_CALLBACK(name) std::function<void(char*, uint8_t*, unsigned int)> name
-#define MQTT_CALLBACK_USER_DATA(name) std::function<void(char*, uint8_t*, unsigned int, void *userdata)> name
-#define MQTT_CALLBACK_SIGNATURE MQTT_CALLBACK(callback)
-#define MQTT_CALLBACK_USER_DATA_SIGNATURE MQTT_CALLBACK_USER_DATA(callback)
-#else
+
 #define MQTT_CALLBACK(name) void (*name)(char*, uint8_t*, unsigned int)
 #define MQTT_CALLBACK_USER_DATA(name) void (*name)(char*, uint8_t*, unsigned int, void *userdata)
 #define MQTT_CALLBACK_SIGNATURE MQTT_CALLBACK(callback)
 #define MQTT_CALLBACK_USER_DATA_SIGNATURE MQTT_CALLBACK_USER_DATA(callback)
-
-#endif
 
 #define CHECK_STRING_LENGTH(l,s) if (l+2+strnlen(s, this->bufferSize) > this->bufferSize) {_client->stop();return false;}
 
